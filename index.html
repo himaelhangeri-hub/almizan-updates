@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1e3a8a">
+<title>متابعة الميزان برو</title>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--tx:#0f172a;--mut:#64748b;--bd:#e2e8f0;--pri:#1e3a8a;--ok:#047857;--bad:#b91c1c;--warn:#b45309}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1220;--card:#152033;--tx:#eef3fb;--mut:#9fb2d0;--bd:#2c3d5c;--pri:#60a5fa;--ok:#34d399;--bad:#f87171;--warn:#fbbf24}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:Tahoma,"Segoe UI",system-ui,sans-serif;padding:0 0 env(safe-area-inset-bottom)}
+header{background:#1e3a8a;color:#fff;padding:14px 16px calc(14px);position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:8px}
+header h1{font-size:16px;margin:0}header small{opacity:.8;font-size:11px;display:block;margin-top:2px}
+button{font:inherit;cursor:pointer}
+#rf{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;padding:8px 12px;font-weight:700;font-size:12px}
+main{padding:12px 14px;max-width:760px;margin:auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px}
+.card .k{font-size:11px;color:var(--mut);font-weight:700}
+.card .v{font-size:19px;font-weight:800;margin-top:4px;direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+h2{font-size:13px;margin:18px 2px 8px;color:var(--mut)}
+.row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--bd);font-size:13px}
+.row:last-child{border:0}.row b{direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sub{font-size:11px;color:var(--mut)}
+.msg{margin:40px 16px;text-align:center;line-height:2}
+.flag{background:#fef3c7;color:#78350f;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;margin-bottom:10px}
+@media(prefers-color-scheme:dark){.flag{background:#3b2e0b;color:#fde68a}}
+footer{padding:16px;text-align:center;font-size:10px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header><div><h1 id="co">الميزان برو</h1><small id="asof">…</small></div><button id="rf" onclick="load()">تحديث ⟳</button></header>
+<main id="m"><div class="msg">جاري التحميل…</div></main>
+<footer>عرض للقراءة فقط • الميزان برو ERP</footer>
+<script>
+const API = 'https://zktkuxgiahtuyjgtmjfq.supabase.co/functions/v1/almizan';
+const token = (location.hash || '').replace(/^#/, '').trim();
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const f = n => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const m = document.getElementById('m');
+function box(k, v, cls) { return `<div class="card"><div class="k">${k}</div><div class="v ${cls || ''}">${f(v)}</div></div>`; }
+function list(title, arr, empty) { return `<h2>${title}</h2><div class="card">${arr.length ? arr.map(x => `<div class="row"><span>${esc(x.name)}</span><b>${f(x.amount)}</b></div>`).join('') : `<div class="sub">${empty}</div>`}</div>`; }
+function render(d) {
+  const s = d.summary; document.getElementById('co').textContent = s.company || 'الميزان برو'; document.getElementById('asof').textContent = 'بيانات حتى ' + s.asOf + ' • ' + new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+  m.innerHTML = (s.reviews ? `<div class="flag">🚩 ${s.reviews} معاملة بانتظار إعادة النظر</div>` : '') +
+    `<div class="grid">${box('الصندوق', s.cash)}${box('البنك', s.bank)}${box('مبيعات الشهر', s.salesMonth, 'ok')}${box('مبيعات السنة', s.salesYear, 'ok')}${box('مصروفات الشهر', s.expMonth, 'warn')}${box('مصروفات السنة', s.expYear, 'warn')}${box('مستحق من العملاء', s.receivables)}${box('منها متأخر +30 يوماً', s.overdue, s.overdue > 0 ? 'bad' : '')}${box('مستحق للموردين', s.payables)}${box('صافي الضريبة المستحقة', s.vatNet, s.vatNet > 0 ? 'warn' : '')}${box('قيمة المخزون', s.inventory)}<div class="card"><div class="k">فواتير هذا الشهر</div><div class="v">${s.invoicesMonth}</div></div></div>` +
+    list('أكبر المستحقات على العملاء', s.topCustomers, 'لا توجد مستحقات.') + list('أكبر المستحقات للموردين', s.topSuppliers, 'لا توجد مستحقات.') +
+    `<h2>آخر الفواتير</h2><div class="card">${s.recent.length ? s.recent.map(i => `<div class="row"><span>${esc(i.no)}<div class="sub">${esc(i.date)} • ${esc(i.customer || 'عميل نقدي')}</div></span><b>${f(i.total)}${i.remain > 0 ? `<div class="sub bad">متبقي ${f(i.remain)}</div>` : ''}</b></div>`).join('') : '<div class="sub">لا توجد فواتير.</div>'}</div>` +
+    `<div class="sub" style="text-align:center;margin-top:14px">ينتهي هذا الرابط: ${new Date(d.expiresAt).toLocaleDateString('ar-SA')}</div>`;
+}
+async function load() {
+  if (token.length < 32) { m.innerHTML = '<div class="msg">الرابط ناقص. اطلب من المدير العام رابط متابعة جديداً.</div>'; return; }
+  const rf = document.getElementById('rf'); rf.disabled = true;
+  try {
+    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view_data', token }), cache: 'no-store' });
+    const d = await r.json();
+    if (!r.ok || !d.ok) { m.innerHTML = `<div class="msg"><b>${esc(d.message || 'تعذر التحميل')}</b><br>اطلب من المدير العام رابطاً جديداً إن لزم.</div>`; return; }
+    render(d);
+  } catch (e) { m.innerHTML = '<div class="msg">تعذر الاتصال بالإنترنت. حاول مرة أخرى.</div>'; }
+  finally { rf.disabled = false; }
+}
+load(); setInterval(() => { if (!document.hidden) load(); }, 120000);
+</script>
+</body>
+</html>
