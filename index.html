@@ -54,6 +54,31 @@ function render(d) {
     `<h2>آخر الفواتير</h2><div class="card">${s.recent.length ? s.recent.map(i => `<div class="row"><span>${esc(i.no)}<div class="sub">${esc(i.date)} • ${esc(i.customer || 'عميل نقدي')}</div></span><b>${f(i.total)}${i.remain > 0 ? `<div class="sub bad">متبقي ${f(i.remain)}</div>` : ''}</b></div>`).join('') : '<div class="sub">لا توجد فواتير.</div>'}</div>` +
     `<div class="sub" style="text-align:center;margin-top:14px">ينتهي هذا الرابط: ${new Date(d.expiresAt).toLocaleDateString('ar-SA')}</div>`;
 }
+
+function renderStatement(d) {
+  const s = d.statement; document.getElementById('co').textContent = s.company || 'الميزان برو'; document.getElementById('asof').textContent = 'كشف حساب • ' + s.asOf;
+  m.innerHTML = `<div class="card"><div class="k">${esc(s.customer)}</div><div class="v ${s.balance > 0 ? 'bad' : 'ok'}">${f(Math.abs(s.balance))}</div><div class="sub">${s.balance > 0 ? 'مستحق عليكم' : s.balance < 0 ? 'رصيد دائن لكم' : 'لا يوجد رصيد'}</div></div><h2>الحركات</h2><div class="card">${s.rows.length ? s.rows.slice().reverse().map(r => `<div class="row"><span>${esc(r.desc)}<div class="sub">${esc(r.date)}</div></span><b>${r.debit ? '+' + f(r.debit) : '-' + f(r.credit)}<div class="sub">الرصيد ${f(r.balance)}</div></b></div>`).join('') : '<div class="sub">لا توجد حركات.</div>'}</div><div class="sub" style="text-align:center;margin-top:14px">ينتهي هذا الرابط: ${new Date(d.expiresAt).toLocaleDateString('ar-SA')}</div>`;
+}
+let entryShown = false;
+function renderEntry(d) {
+  if (entryShown) return; entryShown = true;
+  document.getElementById('co').textContent = d.company || 'الميزان برو'; document.getElementById('asof').textContent = 'إدخال سريع (يُحفظ كمسودة للاعتماد)';
+  const opt = a => a.map(x => `<option value="${esc(x.code)}">${esc(x.name)}</option>`).join('');
+  m.innerHTML = `<div class="card"><div class="k">نوع العملية</div><select id="eT" style="width:100%;padding:10px;font:inherit;margin:6px 0"><option value="expense">مصروف</option><option value="receipt">قبض / إيراد</option></select>
+    <div class="k">الحساب</div><select id="eA" style="width:100%;padding:10px;font:inherit;margin:6px 0"></select>
+    <div class="k">المبلغ</div><input id="eM" type="number" inputmode="decimal" min="0" step="0.01" style="width:100%;padding:10px;font:inherit;margin:6px 0">
+    <div class="k">البيان</div><input id="eD" maxlength="200" style="width:100%;padding:10px;font:inherit;margin:6px 0">
+    <button id="eS" style="width:100%;padding:12px;background:#1e3a8a;color:#fff;border:0;border-radius:10px;font-weight:700;margin-top:8px">إرسال للاعتماد</button><div id="eR" class="sub" style="margin-top:8px"></div></div>`;
+  const fill = () => { document.getElementById('eA').innerHTML = opt(document.getElementById('eT').value === 'expense' ? d.expenseAccounts : d.revenueAccounts); }; fill(); document.getElementById('eT').onchange = fill;
+  document.getElementById('eS').onclick = async () => {
+    const b = document.getElementById('eS'), r = document.getElementById('eR'); b.disabled = true;
+    try {
+      const x = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view_submit', token, type: document.getElementById('eT').value, account: document.getElementById('eA').value, amount: document.getElementById('eM').value, desc: document.getElementById('eD').value }) });
+      const j = await x.json();
+      if (j.ok) { r.innerHTML = '<b class="ok">✔ تم الإرسال. سيعتمده المحاسب في البرنامج.</b>'; document.getElementById('eM').value = ''; document.getElementById('eD').value = ''; } else r.innerHTML = '<b class="bad">' + esc(j.message || 'تعذر الإرسال') + '</b>';
+    } catch (e) { r.innerHTML = '<b class="bad">تعذر الاتصال.</b>'; } finally { b.disabled = false; }
+  };
+}
 async function load() {
   if (token.length < 32) { m.innerHTML = '<div class="msg">الرابط ناقص. اطلب من المدير العام رابط متابعة جديداً.</div>'; return; }
   const rf = document.getElementById('rf'); rf.disabled = true;
@@ -61,7 +86,7 @@ async function load() {
     const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view_data', token }), cache: 'no-store' });
     const d = await r.json();
     if (!r.ok || !d.ok) { m.innerHTML = `<div class="msg"><b>${esc(d.message || 'تعذر التحميل')}</b><br>اطلب من المدير العام رابطاً جديداً إن لزم.</div>`; return; }
-    render(d);
+    if (d.kind === 'customer') renderStatement(d); else if (d.kind === 'entry') renderEntry(d); else render(d);
   } catch (e) { m.innerHTML = '<div class="msg">تعذر الاتصال بالإنترنت. حاول مرة أخرى.</div>'; }
   finally { rf.disabled = false; }
 }
